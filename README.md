@@ -129,6 +129,14 @@ The bot only answers chats you allow. To allow yours, you need your chat ID, and
 4. The bot replies: *"Your chat ID is 123456789…"*. Copy that number.
 5. Back on the **Configuration** tab, paste the number into **allowed_chat_ids** and click **Save**.
    To allow more than one chat, separate the IDs with commas: `123456789, -1001234567890`.
+
+   > **If saving fails** with "expected str" or "Invalid list": the settings form can save the
+   > chat ID as a number instead of text. Open **⋮ → Edit in YAML** and write the line with
+   > single quotes, leaving the other settings unquoted:
+   > ```yaml
+   > allowed_chat_ids: '123456789'
+   > ```
+   > For several chats: `allowed_chat_ids: '123456789, -1001234567890'`
 6. Go to the **Info** tab and click **Restart**.
 7. Send `/start` to the bot again. This time it replies with instructions instead of your chat ID.
    You're set up.
@@ -204,6 +212,7 @@ Start with the app's **Log** tab. Most problems show up there.
 | The app stops right after starting | Check the log. `InvalidToken` means the Telegram token is wrong or has extra spaces. |
 | Bot doesn't reply at all | Make sure the app is running. Check that you're messaging the right bot (the username from step 2). |
 | Log shows `Conflict: terminated by other getUpdates request` | Something else is using the same bot token, often Home Assistant's own Telegram integration. Create a new bot for this app (step 2). |
+| "Failed to save: expected str" or "Invalid list for option 'allowed_chat_ids'" | Use **⋮ → Edit in YAML** and write `allowed_chat_ids: '123456789'`, with single quotes around the ID(s) only. See [step 6](#step-6-start-the-app-and-allow-your-chat). |
 | Bot only ever replies with your chat ID | That chat isn't in **allowed_chat_ids** yet, or you didn't restart the app after saving. |
 | Bot ignores links in a group | Turn privacy mode off (see [Sharing it with your household](#sharing-it-with-your-household-telegram-group)), then remove the bot from the group and add it back. |
 | "Couldn't read <link>" | Some sites block automated requests. Paste the ingredient list instead. |
