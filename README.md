@@ -10,3 +10,6 @@
 3. Find **Recipe to Grocery List** in the list and install it.
 
 Updates appear automatically when the app's `version` in `config.yaml` changes.
+
+## License
+MIT. See [LICENSE](LICENSE).
