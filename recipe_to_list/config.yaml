@@ -1,0 +1,33 @@
+name: Recipe to Grocery List
+version: "1.0.0"
+slug: recipe_to_list
+description: Send recipe links to a Telegram bot, get a merged, checkable shopping list, push it to a Home Assistant to-do list (e.g. OurGroceries).
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+homeassistant_api: true
+options:
+  telegram_bot_token: ""
+  anthropic_api_key: ""
+  allowed_chat_ids: []
+  todo_entity: ""
+  model: claude-opus-5-5
+  pantry_staples:
+    - salt
+    - black pepper
+    - water
+    - olive oil
+    - vegetable oil
+    - all-purpose flour
+    - granulated sugar
+schema:
+  telegram_bot_token: password
+  anthropic_api_key: password
+  allowed_chat_ids:
+    - int
+  todo_entity: match(^todo\..+$)
+  model: str
+  pantry_staples:
+    - str
