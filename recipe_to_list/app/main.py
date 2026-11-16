@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update
 from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
@@ -159,12 +159,18 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         return
     cid = update.effective_chat.id
     text = update.message.text or ""
-    links = parse_message(text)
+    entities = update.message.parse_entities([MessageEntity.URL, MessageEntity.TEXT_LINK])
+    entity_urls = [e.url if e.type == MessageEntity.TEXT_LINK else value for e, value in entities.items()]
+    links = parse_message(text, entity_urls)
+    log.info("Message from chat %s: %d link(s): %r", cid, len(links), text[:120])
 
     if not links:
         lines = [ln.strip("•-* \t") for ln in text.splitlines() if ln.strip()]
         if len(lines) < 2:
-            await update.message.reply_text("Send a recipe link, or paste an ingredient list (one per line).")
+            await update.message.reply_text(
+                "I didn't find a recipe link in that. Send a link, or paste an ingredient list "
+                "(at least two lines, one ingredient per line)."
+            )
             return
         pending.setdefault(cid, []).append(Recipe("pasted", "Pasted ingredients", "", lines))
     else:
@@ -284,7 +290,8 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(on_button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     log.info("Bot starting; allowed chats: %s; list: %s", sorted(ALLOWED) or "none yet", TODO)
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Skip messages that piled up while the app was stopped, so they aren't answered all at once.
+    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 
 if __name__ == "__main__":

@@ -33,12 +33,25 @@ class Recipe:
     page_text: str | None = None  # set only when structured data was missing
 
 
-def parse_message(text: str) -> list[tuple[str, float]]:
-    """Return (url, multiplier) pairs from a chat message."""
-    urls = URL_RE.findall(text)
-    m = SCALE_RE.search(URL_RE.sub(" ", text))
+def parse_message(text: str, entity_urls: list[str] | None = None) -> list[tuple[str, float]]:
+    """Return (url, multiplier) pairs from a chat message.
+
+    entity_urls are links Telegram itself detected, which also covers links without
+    "https://" and links hidden behind text.
+    """
+    urls: list[str] = []
+    for u in [*(entity_urls or []), *URL_RE.findall(text)]:
+        u = u.rstrip(").,>")
+        if not re.match(r"https?://", u, re.I):
+            u = "https://" + u
+        if u not in urls:
+            urls.append(u)
+    rest = text
+    for u in entity_urls or []:
+        rest = rest.replace(u, " ")
+    m = SCALE_RE.search(URL_RE.sub(" ", rest))
     mult = float(m.group(1) or m.group(2)) if m else 1.0
-    return [(u.rstrip(").,>"), mult) for u in urls]
+    return [(u, mult) for u in urls]
 
 
 async def fetch_recipe(url: str, multiplier: float = 1.0) -> Recipe:
