@@ -6,6 +6,7 @@ import html
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -39,7 +40,7 @@ def load_options() -> dict:
     return {
         "telegram_bot_token": os.environ["TELEGRAM_BOT_TOKEN"],
         "anthropic_api_key": os.environ.get("ANTHROPIC_API_KEY", ""),
-        "allowed_chat_ids": [int(x) for x in os.environ.get("ALLOWED_CHAT_IDS", "").split(",") if x],
+        "allowed_chat_ids": os.environ.get("ALLOWED_CHAT_IDS", ""),
         "todo_entity": os.environ["TODO_ENTITY"],
         "model": os.environ.get("MODEL", "claude-opus-5-5"),
         "pantry_staples": os.environ.get("PANTRY", "salt,black pepper,water").split(","),
@@ -53,7 +54,14 @@ class Checklist:
 
 
 OPTS = load_options()
-ALLOWED = set(OPTS.get("allowed_chat_ids") or [])
+def parse_chat_ids(value) -> set[int]:
+    """Accept "123, -100456" (current format) or a list (older configs)."""
+    if isinstance(value, list):
+        value = ",".join(str(v) for v in value)
+    return {int(x) for x in re.findall(r"-?\d+", str(value or ""))}
+
+
+ALLOWED = parse_chat_ids(OPTS.get("allowed_chat_ids"))
 TODO = OPTS["todo_entity"]
 PANTRY = OPTS.get("pantry_staples") or []
 consolidator = Consolidator(OPTS["anthropic_api_key"] or None, OPTS.get("model") or "claude-opus-5-5")

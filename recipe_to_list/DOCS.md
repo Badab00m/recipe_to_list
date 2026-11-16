@@ -127,7 +127,8 @@ The bot only answers chats you allow. To allow yours, you need your chat ID, and
 3. In Telegram, find your bot by the username from step 2, open it, and tap **Start**
    (or send `/start`).
 4. The bot replies: *"Your chat ID is 123456789…"*. Copy that number.
-5. Back on the **Configuration** tab, add the number under **allowed_chat_ids** and click **Save**.
+5. Back on the **Configuration** tab, paste the number into **allowed_chat_ids** and click **Save**.
+   To allow more than one chat, separate the IDs with commas: `123456789, -1001234567890`.
 6. Go to the **Info** tab and click **Restart**.
 7. Send `/start` to the bot again. This time it replies with instructions instead of your chat ID.
    You're set up.
@@ -174,8 +175,8 @@ To let someone else use the bot too, put it in a Telegram group:
    If the bot was already in the group, remove it and add it again so the privacy change applies.
 3. Send `/start` in the group. The bot replies with the **group's** chat ID, a negative
    number like `-1001234567890`.
-4. Add that number to **allowed_chat_ids** (keep your own too if you still want to use the bot
-   privately), click **Save**, and restart the app.
+4. Add that number to **allowed_chat_ids**, after a comma (keep your own too if you still want to use
+   the bot privately), e.g. `123456789, -1001234567890`, click **Save**, and restart the app.
 
 ---
 
@@ -186,7 +187,7 @@ To let someone else use the bot too, put it in a Telegram group:
 | `telegram_bot_token` | Yes | Bot token from @BotFather. |
 | `anthropic_api_key` | Yes | Claude API key. |
 | `todo_entity` | Yes | The Home Assistant to-do list that items are added to. Must start with `todo.`. |
-| `allowed_chat_ids` | Yes | Telegram chat IDs the bot will answer. Everyone else is ignored. |
+| `allowed_chat_ids` | Yes | Telegram chat IDs the bot will answer, separated by commas. Everyone else is ignored. |
 | `model` | No | Claude model used for merging. Default `claude-opus-5-5`. `claude-sonnet-5-5` is cheaper. |
 | `pantry_staples` | No | Items that start unchecked on the checklist. |
 

@@ -1,5 +1,5 @@
 name: Recipe to Grocery List
-version: "1.0.0"
+version: "1.0.1"
 slug: recipe_to_list
 description: Send recipe links to a Telegram bot, get a merged, checkable shopping list, push it to a Home Assistant to-do list (e.g. OurGroceries).
 arch:
@@ -11,7 +11,7 @@ homeassistant_api: true
 options:
   telegram_bot_token: ""
   anthropic_api_key: ""
-  allowed_chat_ids: []
+  allowed_chat_ids: ""
   todo_entity: ""
   model: claude-opus-5-5
   pantry_staples:
@@ -25,8 +25,7 @@ options:
 schema:
   telegram_bot_token: password
   anthropic_api_key: password
-  allowed_chat_ids:
-    - int
+  allowed_chat_ids: "str?"
   todo_entity: match(^todo\..+$)
   model: str
   pantry_staples:
