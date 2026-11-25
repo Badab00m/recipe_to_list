@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
 import json
 import logging
@@ -23,7 +24,8 @@ from telegram.ext import (
 
 from .consolidate import Consolidator, ShoppingItem
 from .ha import HomeAssistant
-from .recipes import Recipe, fetch_recipe, parse_message
+from .images import prepare_image
+from .recipes import SCALE_RE, Recipe, fetch_recipe, parse_message
 
 logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -69,6 +71,9 @@ ha = HomeAssistant()
 
 pending: dict[int, list[Recipe]] = {}            # chat_id -> recipes collected so far
 checklists: dict[tuple[int, int], Checklist] = {}  # (chat_id, message_id) -> checklist
+albums: dict[str, list] = {}                       # media_group_id -> photo messages
+_tasks: set[asyncio.Task] = set()                 # keeps album timers alive
+ALBUM_WAIT = 2.0  # seconds to wait for the rest of an album to arrive
 
 
 def allowed(update: Update) -> bool:
@@ -119,7 +124,7 @@ def collected_text(chat_id: int) -> str:
         scale = f" ×{r.multiplier:g}" if r.multiplier != 1 else ""
         serves = f" ({html.escape(r.yields)})" if r.yields else ""
         lines.append(f"• {html.escape(r.title)}{serves}{scale}: {len(r.ingredients)} ingredients")
-    lines.append("\nSend more links, or tap <b>Build list</b>.")
+    lines.append("\nSend more recipes (links, photos or text), or tap <b>Build list</b>.")
     return "\n".join(lines)
 
 
@@ -132,9 +137,12 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
     await update.message.reply_text(
-        "Send me recipe links (add x2 to double one). I'll queue them up, then "
-        "tap Build list to get one merged checklist.\n\n"
-        "You can also paste a plain ingredient list.\n"
+        "Send me any of these, and add x2 to double a recipe:\n"
+        "• a recipe link\n"
+        "• a photo of a recipe (cookbook page, recipe card, screenshot). Send several "
+        "photos together for a multi-page recipe\n"
+        "• pasted text: an ingredient list or a whole recipe\n\n"
+        "I'll queue them up. Tap Build list to get one merged checklist.\n"
         "/list shows what's queued, /clear empties it."
     )
 
@@ -154,6 +162,71 @@ async def clear(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Cleared.")
 
 
+def pasted_multiplier(text: str) -> float:
+    """In pasted recipes, only a line that is just "x2" (etc.) counts, so "2 x 4 inch" doesn't."""
+    for line in text.splitlines():
+        m = SCALE_RE.fullmatch(" " + line.strip())
+        if m:
+            return float(m.group(1) or m.group(2))
+    return 1.0
+
+
+NOTHING_FOUND = (
+    "I didn't find a recipe in that. Send a recipe link, a photo of a recipe, "
+    "or paste the ingredients or the whole recipe."
+)
+
+
+async def on_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    if not allowed(update):
+        return
+    msg = update.message
+    if msg.media_group_id:
+        # Albums arrive as separate messages; collect them, then read them as one recipe.
+        group = albums.setdefault(msg.media_group_id, [])
+        group.append(msg)
+        if len(group) == 1:
+            task = asyncio.create_task(_read_album_later(msg.media_group_id, ctx))
+            _tasks.add(task)
+            task.add_done_callback(_tasks.discard)
+        return
+    await read_photos(update.effective_chat.id, [msg], ctx)
+
+
+async def _read_album_later(group_id: str, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    await asyncio.sleep(ALBUM_WAIT)
+    msgs = albums.pop(group_id, [])
+    if msgs:
+        await read_photos(msgs[0].chat.id, sorted(msgs, key=lambda m: m.message_id), ctx)
+
+
+async def read_photos(cid: int, msgs: list, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    caption = " ".join(m.caption for m in msgs if m.caption)
+    m = SCALE_RE.search(caption)
+    mult = float(m.group(1) or m.group(2)) if m else 1.0
+    n = len(msgs)
+    log.info("Photo(s) from chat %s: %d image(s), caption %r", cid, n, caption[:120])
+    status = await ctx.bot.send_message(cid, f"Reading {'photo' if n == 1 else f'{n} photos'}…")
+    try:
+        images = []
+        for msg in msgs:
+            tg_file = await (msg.photo[-1] if msg.photo else msg.document).get_file()
+            images.append(await asyncio.to_thread(prepare_image, bytes(await tg_file.download_as_bytearray())))
+        r = await consolidator.extract_from_images(Recipe("photo", "Recipe photo", "", [], mult), images, caption)
+    except Exception as e:
+        log.exception("Photo extraction failed")
+        await status.edit_text(
+            f"Couldn't read that photo ({type(e).__name__}). Try a clearer, closer shot, or paste the ingredients."
+        )
+        return
+    await status.delete()
+    if not r.ingredients:
+        await ctx.bot.send_message(cid, "I couldn't find recipe ingredients in that photo. Try a clearer, closer shot.")
+        return
+    pending.setdefault(cid, []).append(r)
+    await ctx.bot.send_message(cid, collected_text(cid), parse_mode=ParseMode.HTML, reply_markup=collected_markup())
+
+
 async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not allowed(update):
         return
@@ -165,14 +238,22 @@ async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     log.info("Message from chat %s: %d link(s): %r", cid, len(links), text[:120])
 
     if not links:
-        lines = [ln.strip("•-* \t") for ln in text.splitlines() if ln.strip()]
-        if len(lines) < 2:
-            await update.message.reply_text(
-                "I didn't find a recipe link in that. Send a link, or paste an ingredient list "
-                "(at least two lines, one ingredient per line)."
-            )
+        if len(text.strip()) < 4:
+            await update.message.reply_text(NOTHING_FOUND)
             return
-        pending.setdefault(cid, []).append(Recipe("pasted", "Pasted ingredients", "", lines))
+        mult = pasted_multiplier(text)
+        status = await update.message.reply_text("Reading your text…")
+        try:
+            r = await consolidator.extract_from_text(Recipe("pasted", "Pasted recipe", "", [], mult), text)
+        except Exception as e:
+            log.exception("Text extraction failed")
+            await status.edit_text(f"Couldn't read that ({type(e).__name__}). Please try again.")
+            return
+        await status.delete()
+        if not r.ingredients:
+            await update.message.reply_text(NOTHING_FOUND)
+            return
+        pending.setdefault(cid, []).append(r)
     else:
         status = await update.message.reply_text("Reading recipe…")
         for url, mult in links:
@@ -288,6 +369,7 @@ def main() -> None:
     app.add_handler(CommandHandler("list", show_list))
     app.add_handler(CommandHandler("clear", clear))
     app.add_handler(CallbackQueryHandler(on_button))
+    app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, on_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     log.info("Bot starting; allowed chats: %s; list: %s", sorted(ALLOWED) or "none yet", TODO)
     # Skip messages that piled up while the app was stopped, so they aren't answered all at once.

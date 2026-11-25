@@ -1,7 +1,7 @@
 name: Recipe to Grocery List
-version: "1.0.2"
+version: "1.1.0"
 slug: recipe_to_list
-description: Send recipe links to a Telegram bot, get a merged, checkable shopping list, push it to a Home Assistant to-do list (e.g. OurGroceries).
+description: Send recipe links, photos or pasted recipes to a Telegram bot, get a merged, checkable shopping list, push it to a Home Assistant to-do list (e.g. OurGroceries).
 arch:
   - amd64
   - aarch64

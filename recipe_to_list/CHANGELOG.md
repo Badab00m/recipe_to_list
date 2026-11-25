@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.0
+- Send a photo of a recipe (cookbook page, recipe card, screenshot) and its ingredients are read
+  from the image. Send several photos together for a multi-page recipe. Add `x2` in the caption to scale.
+- Paste a whole recipe, not just an ingredient list. Intro text and steps are ignored.
+
 ## 1.0.2
 - Ignore messages that piled up while the app was stopped, instead of answering them all on startup.
 - Recognize links without "https://" and links hidden behind text (e.g. some share buttons).

@@ -79,19 +79,40 @@ class Consolidator:
             raise RuntimeError(f"Claude returned an incomplete list (stop_reason={resp.stop_reason}).")
         return resp.parsed_output
 
-    async def extract_from_page(self, recipe: Recipe) -> Recipe:
-        """Fallback for pages without schema.org recipe data."""
-        out: ExtractedRecipe = await self._parse(
-            f"URL: {recipe.url}\n\nPage text:\n{recipe.page_text}",
-            ExtractedRecipe,
-            "Extract the recipe's title, yield/servings, and every ingredient line verbatim from "
-            "this web page text. If there is no recipe on the page, return an empty ingredients list.",
-        )
+    EXTRACT_SYSTEM = (
+        "Extract the recipe's title, yield/servings, and every ingredient line verbatim, with "
+        "quantities and units exactly as written. Include ingredients from every component "
+        "(sauce, dough, topping). Don't include equipment or instruction steps. If there is "
+        "more than one recipe, combine all their ingredients and title it with all the names. "
+        "If you can't find any recipe ingredients, return an empty ingredients list. "
+        "If there is no title, make up a short descriptive one."
+    )
+
+    async def _extract(self, recipe: Recipe, content) -> Recipe:
+        out: ExtractedRecipe = await self._parse(content, ExtractedRecipe, self.EXTRACT_SYSTEM)
         recipe.title = out.title or recipe.title
         recipe.yields = out.yields
-        recipe.ingredients = out.ingredients
+        recipe.ingredients = [i.strip() for i in out.ingredients if i.strip()]
         recipe.page_text = None
         return recipe
+
+    async def extract_from_page(self, recipe: Recipe) -> Recipe:
+        """Fallback for web pages without schema.org recipe data."""
+        return await self._extract(recipe, f"Web page {recipe.url}:\n\n{recipe.page_text}")
+
+    async def extract_from_text(self, recipe: Recipe, text: str) -> Recipe:
+        """Pasted text: a bare ingredient list or a whole recipe with steps."""
+        return await self._extract(recipe, f"Text pasted by the user:\n\n{text}")
+
+    async def extract_from_images(self, recipe: Recipe, images: list[tuple[str, str]], caption: str) -> Recipe:
+        """Photos of a recipe (cookbook page, recipe card, screenshot). images = (media_type, base64)."""
+        content = [
+            {"type": "image", "source": {"type": "base64", "media_type": mt, "data": data}}
+            for mt, data in images
+        ]
+        note = f"The user's caption: {caption}\n\n" if caption else ""
+        content.append({"type": "text", "text": note + "Extract the recipe from these photo(s)."})
+        return await self._extract(recipe, content)
 
     async def consolidate(
         self, recipes: list[Recipe], pantry: list[str], existing: list[str]

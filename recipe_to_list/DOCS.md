@@ -2,7 +2,8 @@
 
 A Home Assistant app that turns recipe links into a grocery list.
 
-Send a Telegram bot one or more recipe links. It merges every ingredient across all the recipes
+Send a Telegram bot recipe links, photos of recipes (cookbook pages, recipe cards, screenshots),
+or pasted recipe text. It merges every ingredient across all the recipes
 (3 tbsp butter in one step + 2 tbsp in another → **Butter (5 tbsp)**) and shows you a
 checklist in Telegram. Only the items you leave checked get added to your OurGroceries list,
 or any other Home Assistant to-do list.
@@ -10,7 +11,8 @@ or any other Home Assistant to-do list.
 ```
 You: https://example.com/lasagna x2
 You: https://example.com/garlic-bread
-Bot: 2 recipe(s) queued … [🧾 Build list]
+You: 📷 (photo of a cookbook page)
+Bot: 3 recipe(s) queued … [🧾 Build list]
 Bot: Shopping list: 23 items. Tap to check/uncheck.
      ✅ Unsalted Butter (7 tbsp)
      ✅ Garlic (~8 cloves)
@@ -146,7 +148,8 @@ The bot only answers chats you allow. To allow yours, you need your chat ID, and
 ## Step 7: Try it
 
 1. Open any recipe in your phone's browser.
-2. Tap **Share → Telegram →** your bot, then send it. Copying and pasting the link also works.
+2. Tap **Share → Telegram →** your bot, then send it. Copying and pasting the link also works,
+   and so does a photo of a recipe from a cookbook.
 3. The bot replies with the recipe name and ingredient count, plus a **Build list** button.
 4. Tap **Build list** and wait 10–30 seconds while Claude merges everything.
 5. Check and uncheck items, then tap **Add N items**.
@@ -156,12 +159,20 @@ The bot only answers chats you allow. To allow yours, you need your chat ID, and
 
 ## Using it day to day
 
-- **Several recipes at once:** keep sending links before you tap **Build list**. Everything
+- **Three ways to send a recipe**, and you can mix them:
+  - **Link:** share or paste the recipe's web address.
+  - **Photo:** take a picture of a cookbook page or recipe card, or send a screenshot. For a recipe
+    that spans pages, select all the photos and send them together in one message; they're read as
+    one recipe. Photos sent "as a file" work too, including iPhone HEIC photos.
+  - **Pasted text:** paste just the ingredients, or the whole recipe with its intro and steps.
+    Only the ingredients are kept.
+- **Several recipes at once:** keep sending recipes before you tap **Build list**. Everything
   is merged into one list.
-- **Scaling a recipe:** add `x2`, `x1.5`, `3x`, etc. to the message with the link:
-  `https://example.com/chili x3`.
-- **No link, or the site won't load:** paste the ingredient list as a message, one ingredient
-  per line.
+- **Scaling a recipe:** add `x2`, `x1.5`, `3x`, etc.:
+  - with a link, in the same message: `https://example.com/chili x3`
+  - with a photo, in the photo's caption: `x2`
+  - with pasted text, on a line of its own at the start or end of the message
+- **If a site won't load:** send a screenshot of the recipe, or paste it instead.
 - **What starts unchecked:** pantry staples, and anything already on your grocery list. Tap to
   include them anyway. **Select all** and **Select none** are at the bottom.
 - **"Double-check" notes:** when Claude had to make a judgment call (e.g. merging "2 cloves
@@ -215,7 +226,8 @@ Start with the app's **Log** tab. Most problems show up there.
 | "Failed to save: expected str" or "Invalid list for option 'allowed_chat_ids'" | Use **⋮ → Edit in YAML** and write `allowed_chat_ids: '123456789'`, with single quotes around the ID(s) only. See [step 6](#step-6-start-the-app-and-allow-your-chat). |
 | Bot only ever replies with your chat ID | That chat isn't in **allowed_chat_ids** yet, or you didn't restart the app after saving. |
 | Bot ignores links in a group | Turn privacy mode off (see [Sharing it with your household](#sharing-it-with-your-household-telegram-group)), then remove the bot from the group and add it back. |
-| "Couldn't read <link>" | Some sites block automated requests. Paste the ingredient list instead. |
+| "Couldn't read <link>" | Some sites block automated requests. Send a screenshot of the recipe, or paste it instead. |
+| "I couldn't find recipe ingredients in that photo" | Take the photo closer and straight on, in good light, with the ingredient list filling most of the frame. |
 | "Merging failed: … authentication" | The Claude API key is wrong. Re-copy it into **anthropic_api_key** and restart the app. |
 | "Merging failed: … credit balance" | Add credit in the Claude Console under **Billing**. |
 | Bot says items were added, but they aren't in OurGroceries | Check **todo_entity**, and look for `add_item failed` in the log. Also check that the list itself works from Home Assistant: add an item by hand on its to-do page. |
